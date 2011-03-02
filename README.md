@@ -1,7 +1,7 @@
 # couchfoo
 
-couchfoo is a standalone command line tool to analyse offline Apache CouchDB database
-files. It also allows to grab an existing header from a database file and append a copy
+couchfoo is a standalone command line tool to analyse Apache CouchDB database files.
+It also allows to grab an existing header from a database file and append a copy
 of it to the end of that same database file. These two main features make it an useful
 tool to help recover corrupted database files and hack on the core database engine.
 
