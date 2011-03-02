@@ -1,0 +1,7 @@
+/ebin
+/tmp
+*~
+/src/*~
+/support/*~
+/tests/*~
+couchfoo
