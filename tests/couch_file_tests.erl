@@ -44,22 +44,22 @@ header_count_test() ->
     {ok, ValidCount1, CorruptedCount1} =
         couch_file:header_count(File, couch_file:file_size(File), 0),
     ?assertEqual(10, ValidCount1),
-    ?assertEqual(1, CorruptedCount1),
+    ?assertEqual(2, CorruptedCount1),
 
     {ok, ValidCount2, CorruptedCount2} =
         couch_file:header_count(File, couch_file:file_size(File) * 2, 0),
     ?assertEqual(10, ValidCount2),
-    ?assertEqual(1, CorruptedCount2),
+    ?assertEqual(2, CorruptedCount2),
 
     {ok, ValidCount3, CorruptedCount3} =
         couch_file:header_count(File, couch_file:file_size(File), 1),
     ?assertEqual(9, ValidCount3),
-    ?assertEqual(1, CorruptedCount3),
+    ?assertEqual(2, CorruptedCount3),
 
     {ok, ValidCount4, CorruptedCount4} =
         couch_file:header_count(File, couch_file:file_size(File), 4096),
     ?assertEqual(9, ValidCount4),
-    ?assertEqual(1, CorruptedCount4),
+    ?assertEqual(2, CorruptedCount4),
 
     {ok, ValidCount5, CorruptedCount5} = couch_file:header_count(File, 8192, 0),
     ?assertEqual(3, ValidCount5),
@@ -81,7 +81,7 @@ header_count_test() ->
     {ok, ValidCount8, CorruptedCount8} =
         couch_file:header_count(File, couch_file:file_size(File), 0),
     ?assertEqual(9, ValidCount8),
-    ?assertEqual(2, CorruptedCount8),
+    ?assertEqual(3, CorruptedCount8),
 
     ?assertEqual(ok, couch_file:close(File)).
 
@@ -94,12 +94,18 @@ header_find_test() ->
     {ok, File} = OpenResult,
     BlockCount = couch_file:block_count(File),
 
-    Find1 = couch_file:find_header(File, couch_file:file_size(File), 0),
+    FindTruncated = couch_file:find_header(File, couch_file:file_size(File), 0),
+    ?assertMatch({corrupted_header, <<"header is truncated">>, _}, FindTruncated),
+    ?assertEqual(BlockCount - 1, element(3, FindTruncated)),
+
+    Find1 = couch_file:find_header(File, couch_file:block_to_offset(BlockCount - 2), 0),
     ?assertMatch({ok, _, _, _}, Find1),
-    ?assertEqual(BlockCount - 1, element(4, Find1)),
+    ?assertEqual(BlockCount - 2, element(4, Find1)),
 
     Find2 = couch_file:find_header(
-        File, couch_file:file_size(File), couch_file:file_size(File) - 4096),
+        File,
+        couch_file:block_to_offset(BlockCount - 2),
+        couch_file:block_to_offset(BlockCount - 2) - 4096),
     ?assertMatch({ok, _, _, _}, Find2),
     ?assertEqual(Find1, Find2),
 
@@ -134,13 +140,17 @@ header_open_test() ->
     {ok, File} = OpenResult,
     BlockCount = couch_file:block_count(File),
 
-    Result1 = couch_file:open_header(File, couch_file:block_to_offset(BlockCount - 1)),
+    ResultTruncated = couch_file:open_header(
+        File, couch_file:block_to_offset(BlockCount - 1)),
+    ?assertEqual({corrupted_header, <<"header is truncated">>}, ResultTruncated),
+
+    Result1 = couch_file:open_header(File, couch_file:block_to_offset(BlockCount - 2)),
     ?assertMatch({ok, #db_header{}}, Result1),
 
-    Result2 = couch_file:open_header(File, couch_file:block_to_offset(BlockCount - 1) + 1),
+    Result2 = couch_file:open_header(File, couch_file:block_to_offset(BlockCount - 2) + 1),
     ?assertMatch(invalid_header, Result2),
 
-    Result3 = couch_file:open_header(File, couch_file:block_to_offset(BlockCount - 1) - 1),
+    Result3 = couch_file:open_header(File, couch_file:block_to_offset(BlockCount - 2) - 1),
     ?assertMatch(invalid_header, Result3),
 
     Result4 = couch_file:open_header(File, 8192),
@@ -168,7 +178,7 @@ read_header_btree_roots_test() ->
     {ok, File} = OpenResult,
     BlockCount = couch_file:block_count(File),
 
-    Result1 = couch_file:open_header(File, couch_file:block_to_offset(BlockCount - 1)),
+    Result1 = couch_file:open_header(File, couch_file:block_to_offset(BlockCount - 2)),
     ?assertMatch({ok, #db_header{}}, Result1),
 
     {ok, Header} = Result1,
@@ -206,7 +216,7 @@ append_header_test() ->
     {ok, ValidHeaderCountBefore, CorruptedHeaderCountBefore} =
         couch_file:header_count(File, couch_file:file_size(File), 0),
 
-    OpenHeaderResult = couch_file:open_header(File, couch_file:block_to_offset(BlockCount - 4)),
+    OpenHeaderResult = couch_file:open_header(File, couch_file:block_to_offset(BlockCount - 5)),
     ?assertMatch({ok, #db_header{}}, OpenHeaderResult),
     {ok, OriginHeader} = OpenHeaderResult,
 

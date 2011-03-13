@@ -186,25 +186,35 @@ pread_iolist_int(Fd, Pos) ->
 
 
 load_header(Fd, Offset) ->
-    {ok, <<1, HeaderLen:32/integer, RestBlock/binary>>} =
-        file:pread(Fd, Offset, ?SIZE_BLOCK),
-    TotalBytes = calculate_total_read_len(1, HeaderLen),
-    case TotalBytes > byte_size(RestBlock) of
-    false ->
-        <<RawBin:TotalBytes/binary, _/binary>> = RestBlock;
-    true ->
-        {ok, Missing} = file:pread(
-            Fd, Offset + 5 + byte_size(RestBlock),
-            TotalBytes - byte_size(RestBlock)),
-        RawBin = <<RestBlock/binary, Missing/binary>>
-    end,
-    <<Md5Sig:16/binary, HeaderBin/binary>> =
-        iolist_to_binary(remove_block_prefixes(1, RawBin)),
-    case erlang:md5(HeaderBin) of
-    Md5Sig ->
-        {ok, HeaderBin};
-    _ ->
-        {corrupted_header, <<"Header MD5 checksum mismatch.">>}
+    case file:pread(Fd, Offset, 1) of
+    {ok, <<0>>} ->
+        data_block;
+    {ok, <<1>>} ->
+        case file:pread(Fd, Offset + 1, 4) of
+        {ok, <<HeaderLen:32/integer>>} ->
+            TotalBytes = calculate_total_read_len(1, HeaderLen),
+            case file:pread(Fd, Offset + 5, TotalBytes) of
+            {ok, <<RawBin:TotalBytes/binary>>} ->
+                <<Md5Sig:16/binary, HeaderBin/binary>> =
+                    iolist_to_binary(remove_block_prefixes(1, RawBin)),
+                case erlang:md5(HeaderBin) of
+                Md5Sig ->
+                    {ok, HeaderBin};
+                _ ->
+                    {corrupted_header, <<"MD5 checksum mismatch">>}
+                end;
+            {ok, _Bin} ->
+                {corrupted_header, <<"header is truncated">>};
+            Error ->
+                Error
+            end;
+        {ok, _Bin} ->
+            {corrupted_header, <<"header is truncated">>};
+        Error ->
+            Error
+        end;
+    Error ->
+        Error
     end.
 
 

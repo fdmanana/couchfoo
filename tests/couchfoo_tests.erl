@@ -26,6 +26,7 @@ fold_headers_test() ->
     OpenResult = couch_file:open(DbFileName),
     ?assertMatch({ok, {file, _, DbFileName}}, OpenResult),
     {ok, File} = OpenResult,
+    LastBlock = couch_file:block_count(File) - 1,
 
     FoldFun = fun
         ({ok, HeaderTerm, HeaderBin, HeaderBlock}, _File, Acc) ->
@@ -33,9 +34,13 @@ fold_headers_test() ->
             ?assertEqual(term_to_binary(HeaderTerm), HeaderBin),
             {[HeaderTerm | ValidHeaders], [HeaderBlock | ValidHeadersBlocks],
                 CorruptedHeadersBlocks};
+        ({corrupted_header, Reason, HeaderBlock}, _File, Acc) when HeaderBlock =:= LastBlock ->
+            {ValidHeaders, ValidHeadersBlocks, CorruptedHeadersBlocks} = Acc,
+            ?assertEqual(<<"header is truncated">>, Reason),
+            {ValidHeaders, ValidHeadersBlocks, [HeaderBlock | CorruptedHeadersBlocks]};
         ({corrupted_header, Reason, HeaderBlock}, _File, Acc) ->
             {ValidHeaders, ValidHeadersBlocks, CorruptedHeadersBlocks} = Acc,
-            ?assertEqual(<<"Header MD5 checksum mismatch.">>, Reason),
+            ?assertEqual(<<"MD5 checksum mismatch">>, Reason),
             {ValidHeaders, ValidHeadersBlocks, [HeaderBlock | CorruptedHeadersBlocks]}
     end,
 
@@ -46,14 +51,14 @@ fold_headers_test() ->
 
     ?assertEqual(10, length(ValidHeaders1)),
     ?assertEqual((lists:seq(0, 9) -- [5]) ++ [12], ValidHeadersBlocks1),
-    ?assertEqual([5], CorruptedHeadersBlocks1),
+    ?assertEqual([5, 13], CorruptedHeadersBlocks1),
 
     {ValidHeaders2, ValidHeadersBlocks2, CorruptedHeadersBlocks2} =
         couchfoo:fold_headers(File, FileSize, 3000, 999, FoldFun, {[], [], []}),
 
     ?assertEqual(9, length(ValidHeaders2)),
     ?assertEqual((lists:seq(1, 9) -- [5]) ++ [12], ValidHeadersBlocks2),
-    ?assertEqual([5], CorruptedHeadersBlocks2),
+    ?assertEqual([5, 13], CorruptedHeadersBlocks2),
 
     {ValidHeaders3, ValidHeadersBlocks3, CorruptedHeadersBlocks3} =
         couchfoo:fold_headers(File, 8192, 3000, 999, FoldFun, {[], [], []}),
@@ -79,6 +84,6 @@ fold_headers_test() ->
 
     ?assertEqual(9, length(ValidHeaders5)),
     ?assertEqual((lists:seq(0, 9) -- [3, 5]) ++ [12], ValidHeadersBlocks5),
-    ?assertEqual([3, 5], CorruptedHeadersBlocks5),
+    ?assertEqual([3, 5, 13], CorruptedHeadersBlocks5),
 
     ?assertEqual(ok, couch_file:close(File)).

@@ -70,66 +70,20 @@ $
 Examples:
 
 <pre>
-$ ./couchfoo -S -N 3 /mnt/cm/fdmanana/test_dbs/large1kb.couch
+$ ./couchfoo -S -N 4 /mnt/cm/fdmanana/test_dbs/large1kb.couch
 {
     "file": "/mnt/cm/fdmanana/test_dbs/large1kb.couch",
     "file_size": 480342114,
     "file_block_count": 117272,
     "file_start_offset": 480342114,
     "file_end_offset": 0,
-    "max_headers_to_display": 3,
+    "max_headers_to_display": 4,
     "headers": [
         {
             "offset": 480342016,
             "block": 117271,
-            "size": 77,
-            "version": 5,
-            "update_seq": 341301,
-            "unused": 0,
-            "id_btree": {
-                "offset": 480339898,
-                "reduction": {
-                    "not_deleted_doc_count": 341298,
-                    "deleted_doc_count": 0
-                },
-                "stats": {
-                    "depth": 5,
-                    "kp_nodes": 1686,
-                    "kv_nodes": 31956
-                }
-            },
-            "seq_btree": {
-                "offset": 480336370,
-                "reduction": {
-                    "doc_info_record_count": 341298
-                },
-                "stats": {
-                    "depth": 4,
-                    "kp_nodes": 353,
-                    "kv_nodes": 17961
-                }
-            },
-            "local_btree": {
-                "offset": 480317540,
-                "reduction": {
-                    "value": "[]"
-                },
-                "stats": {
-                    "depth": 1,
-                    "kp_nodes": 0,
-                    "kv_nodes": 1
-                }
-            },
-            "purge_seq": 1,
-            "purged_docs": {
-                "offset": 480340016,
-                "value": {"docfoo1":["1-967a00dff5e02add41819138abb3284d"]}
-            },
-            "security_object": {
-                "offset": 480321636,
-                "value": {"admins":{"names":[],"roles":["boss","foobar"]},"members":{"names":[],"roles":[]}}
-            },
-            "revs_limit": 1000
+            "corrupted": true,
+            "corruption_reason": "header is truncated"
         }, {
             "offset": 480333824,
             "block": 117269,
@@ -230,6 +184,11 @@ $ ./couchfoo -S -N 3 /mnt/cm/fdmanana/test_dbs/large1kb.couch
                 "value": {"admins":{"names":[],"roles":["boss","foobar"]},"members":{"names":[],"roles":[]}}
             },
             "revs_limit": 1000
+        }, {
+            "offset": 480321536,
+            "block": 117266,
+            "corrupted": true,
+            "corruption_reason": "MD5 checksum mismatch"
         }
     ],
     "valid_headers": 3,
@@ -244,12 +203,12 @@ $
 $ ./couchfoo --count-headers test_dbs/foo.couch 
 {
     "file": "test_dbs/foo.couch",
-    "file_size": 49241,
-    "file_block_count": 13,
-    "file_start_offset": 49241,
+    "file_size": 53311,
+    "file_block_count": 14,
+    "file_start_offset": 53311,
     "file_end_offset": 0,
     "valid_headers_count": 10,
-    "corrupted_headers_count": 1
+    "corrupted_headers_count": 2
 }
 
 $
