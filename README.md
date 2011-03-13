@@ -191,8 +191,8 @@ $ ./couchfoo -S -N 4 /mnt/cm/fdmanana/test_dbs/large1kb.couch
             "corruption_reason": "MD5 checksum mismatch"
         }
     ],
-    "valid_headers": 3,
-    "corrupted_headers": 0
+    "valid_headers": 2,
+    "corrupted_headers": 2
 }
 
 $
