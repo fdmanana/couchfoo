@@ -66,7 +66,7 @@ Available options are:
 $
 </pre>
 
-Examples:
+# Usage Examples
 
 <pre>
 $ ./couchfoo -S -N 4 /mnt/cm/fdmanana/test_dbs/large1kb.couch
