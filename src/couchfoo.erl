@@ -37,7 +37,7 @@
     unindent/0
 ]).
 
--record(btree_acc, {
+-record(btree_stats, {
     depth = 0,
     kp_nodes = 0,
     kv_nodes = 0
@@ -359,7 +359,7 @@ maybe_report_btree_stats(BTreeState, File) ->
 
 
 report_btree_stats(Acc) ->
-    #btree_acc{
+    #btree_stats{
         kp_nodes = KpNodes,
         kv_nodes = KvNodes,
         depth = Depth
@@ -371,16 +371,16 @@ report_btree_stats(Acc) ->
 
 analyze_btree(BTreeState, File) ->
     couch_btree:depth_first_traverse(
-        BTreeState, File, fun btree_analyst/3, #btree_acc{}).
+        BTreeState, File, fun btree_analyst/3, #btree_stats{}).
 
 
 btree_analyst(map, {kv_node, _KvList}, Acc) ->
-    #btree_acc{depth = Depth, kv_nodes = KvNodes} = Acc,
-    Acc#btree_acc{depth = Depth + 1, kv_nodes = KvNodes + 1};
+    #btree_stats{depth = Depth, kv_nodes = KvNodes} = Acc,
+    Acc#btree_stats{depth = Depth + 1, kv_nodes = KvNodes + 1};
 
 btree_analyst(reduce, {kp_node, _KpList}, AccList) ->
-    #btree_acc{
-        depth = 1 + lists:max([Depth || #btree_acc{depth = Depth} <- AccList]),
-        kp_nodes = 1 + lists:sum([KpNodes || #btree_acc{kp_nodes = KpNodes} <- AccList]),
-        kv_nodes = lists:sum([KvNodes || #btree_acc{kv_nodes = KvNodes} <- AccList])
+    #btree_stats{
+        depth = 1 + lists:max([Depth || #btree_stats{depth = Depth} <- AccList]),
+        kp_nodes = 1 + lists:sum([KpNodes || #btree_stats{kp_nodes = KpNodes} <- AccList]),
+        kv_nodes = lists:sum([KvNodes || #btree_stats{kv_nodes = KvNodes} <- AccList])
     }.
