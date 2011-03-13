@@ -22,6 +22,21 @@
 
 -include("couchfoo.hrl").
 
+-import(json_output, [
+    obj_start/0,
+    obj_end/0,
+    obj_field/2,
+    obj_field_name/1,
+    obj_field_value/1,
+    array_start/0,
+    array_end/0,
+    start_array_element/0,
+    newline/0,
+    spaces/1,
+    indent/0,
+    unindent/0
+]).
+
 -record(btree_acc, {
     depth = 0,
     kp_nodes = 0,
@@ -34,9 +49,24 @@ main(Args) ->
     erlang:put(couchfoo_options, Options),
     FileName = proplists:get_value(db_file, Options),
     {ok, File} = couch_file:open(FileName),
+    case proplists:get_value(copy_header, Options) of
+    undefined ->
+        ok;
+    HeaderOffset ->
+        Result = append_header_command(File, HeaderOffset),
+        ok = couch_file:close(File),
+        halt(if Result -> 0; true -> 1 end)
+    end,
+    obj_start(),
     dump_summary(File),
-    ?cout("~n", []),
-    dump_headers(File),
+    case lists:member(count_headers, Options) of
+    true ->
+        dump_header_count(File);
+    false ->
+        dump_headers(File)
+    end,
+    obj_end(),
+    newline(),
     ok = couch_file:close(File).
 
 
@@ -45,61 +75,59 @@ dump_summary(File) ->
     BlockCount = couch_file:block_count(File),
     FileName = proplists:get_value(db_file, Options),
     FileSize = couch_file:file_size(File),
-    ?cout("Database file `~s` has ~p blocks and is ~p bytes long.~n",
-          [FileName, BlockCount, FileSize]),
+    StartOffset = proplists:get_value(start_offset, Options, FileSize),
+    EndOffset = proplists:get_value(end_offset, Options, 0),
+    obj_field("file", FileName),
+    obj_field("file_size", FileSize),
+    obj_field("file_block_count", BlockCount),
+    obj_field("file_start_offset", StartOffset),
+    obj_field("file_end_offset", EndOffset),
     case lists:member(count_headers, Options) of
     true ->
-        StartOffset = proplists:get_value(start_offset, Options, FileSize),
-        EndOffset = proplists:get_value(end_offset, Options, 0),
-        {ok, ValidHeaders, CorruptedHeaders} = couch_file:header_count(
-            File,
-            lists:min([StartOffset, FileSize]),
-            EndOffset),
-        case (StartOffset =/= FileSize) orelse (EndOffset =/= 0) of
-        true ->
-            ?cout("~n~p valid headers and ~p corrupted headers found in the file offset "
-                  "range [~p, ~p].~n",
-                  [ValidHeaders, CorruptedHeaders, StartOffset, EndOffset]);
-        false ->
-            ?cout("~nFound ~p valid headers and ~p corrupted headers.~n",
-                  [ValidHeaders, CorruptedHeaders])
-        end,
-        halt(0);
+        ok;
     false ->
-        maybe_append_header(File)
+        Max = proplists:get_value(header_count, Options, ?DEFAULT_HEADER_COUNT),
+        obj_field("max_headers_to_display", Max)
     end.
 
 
-maybe_append_header(File) ->
+dump_header_count(File) ->
     Options = erlang:get(couchfoo_options),
-    case proplists:get_value(copy_header, Options) of
-    undefined ->
-        ok;
-    HeaderOffset ->
-        case couch_file:open_header(File, HeaderOffset) of
-        {ok, Header} ->
-            ?cout("~nAre you sure you to copy the following header to the end of "
-                  "the file?~n~n", []),
-            dump_header_info(File, Header),
-            ?cout("~n", []),
-            case string:to_lower(io:get_chars("Y/N ", 1)) of
-            "y" ->
-                case couch_file:append_header(File, Header) of
-                ok ->
-                    ?cout("A copy of the header at offset ~p was successfully appended"
-                          " to the file.~n~nThe header is", [HeaderOffset]),
-                    halt(0);
-                Error ->
-                    ?cerr("Error: couldn't append the header to the file: ~p.~n", [Error]),
-                    halt(1)
-                end;
-            _ ->
-                halt(0)
+    FileSize = couch_file:file_size(File),
+    StartOffset = proplists:get_value(start_offset, Options, FileSize),
+    EndOffset = proplists:get_value(end_offset, Options, 0),
+    {ok, ValidHeaders, CorruptedHeaders} = couch_file:header_count(
+        File,
+        lists:min([StartOffset, FileSize]),
+        EndOffset),
+    obj_field("valid_headers_count", ValidHeaders),
+    obj_field("corrupted_headers_count", CorruptedHeaders).
+
+
+append_header_command(File, HeaderOffset) ->
+    case couch_file:open_header(File, HeaderOffset) of
+    {ok, Header} ->
+        ?cout("~nAre you sure you to copy the following header to the end of "
+              "the file?~n~n", []),
+        dump_header_info(File, Header),
+        ?cout("~n", []),
+        case string:to_lower(io:get_chars("Y/N ", 1)) of
+        "y" ->
+            case couch_file:append_header(File, Header) of
+            ok ->
+                ?cout("A copy of the header at offset ~p was successfully appended"
+                      " to the file.~n~nThe header is", [HeaderOffset]),
+                true;
+            Error ->
+                ?cerr("Error: couldn't append the header to the file: ~p.~n", [Error]),
+                false
             end;
         _ ->
-            ?cerr("Error: no valid header found at offset ~p.~n", [HeaderOffset]),
-            halt(1)
-        end
+            true
+        end;
+    _ ->
+        ?cerr("Error: no valid header found at offset ~p.~n", [HeaderOffset]),
+        false
     end.
 
 
@@ -108,8 +136,17 @@ dump_headers(File) ->
     StartOffset = proplists:get_value(start_offset, Options, couch_file:file_size(File)),
     EndOffset = proplists:get_value(end_offset, Options, 0),
     Max = proplists:get_value(header_count, Options, ?DEFAULT_HEADER_COUNT),
-    DumpCount = fold_headers(File, StartOffset, EndOffset, Max, fun dump_header_info/3, 0),
-    ?cout("~p headers shown.~n", [DumpCount]).
+    obj_field_name("headers"),
+    array_start(),
+    indent(),
+    newline(),
+    {Valid, Corrupt} = fold_headers(
+        File, StartOffset, EndOffset, Max, fun dump_header_info/3, {0, 0}),
+    unindent(),
+    newline(),
+    array_end(),
+    obj_field("valid_headers", Valid),
+    obj_field("corrupted_headers", Corrupt).
 
 
 fold_headers(_File, _StartOffset, _EndOffset, 0, _Fun, Acc) ->
@@ -137,119 +174,154 @@ dump_header_info({corrupted_header, Reason, HeaderBlock}, File, Acc) ->
     dump_invalid_header_info(File, Reason, HeaderBlock, Acc).
 
 
-dump_invalid_header_info(_File, Reason, HeaderBlock, Acc) ->
-    ?cout("Found invalid header at offset ~p (block ~p), reason: ~s~n",
-          [couch_file:block_to_offset(HeaderBlock), HeaderBlock, Reason]),
-    ?cout("~n", []),
-    Acc.
+dump_invalid_header_info(_File, Reason, HeaderBlock, {Valid, Corrupt}) ->
+    start_array_element(),
+    obj_start(),
+    obj_field("offset", couch_file:block_to_offset(HeaderBlock)),
+    obj_field("block", HeaderBlock),
+    obj_field("corrupted", true),
+    obj_field("corruption_reason", Reason),
+    obj_end(),
+    {Valid, Corrupt + 1}.
 
-dump_valid_header_info(File, HeaderTerm, HeaderBin, HeaderBlock, Acc) ->
-    ?cout("Found header at offset ~p (block ~p), ~p bytes, details:~n~n",
-          [couch_file:block_to_offset(HeaderBlock), HeaderBlock, byte_size(HeaderBin)]),
+dump_valid_header_info(File, HeaderTerm, HeaderBin, HeaderBlock, {Valid, Corrupt}) ->
+    start_array_element(),
+    obj_start(),
+    obj_field("offset", couch_file:block_to_offset(HeaderBlock)),
+    obj_field("block", HeaderBlock),
+    obj_field("size", byte_size(HeaderBin)),
     dump_header_info(File, HeaderTerm),
-    ?cout("~n~n", []),
-    Acc + 1.
+    obj_end(),
+    {Valid + 1, Corrupt}.
 
 
 dump_header_info(File, Header) ->
-    ?cout_tab(), ?cout("~-40s: ", ["version"]), ?cout("~p~n", [Header#db_header.disk_version]),
-    ?cout_tab(), ?cout("~-40s: ", ["update seq"]), ?cout("~p~n", [Header#db_header.update_seq]),
-    ?cout_tab(), ?cout("~-40s: ", ["unused"]), ?cout("~p~n", [Header#db_header.unused]),
+    obj_field("version", Header#db_header.disk_version),
+    obj_field("update_seq", Header#db_header.update_seq),
+    obj_field("unused", Header#db_header.unused),
 
-    ?cout_tab(), ?cout("~-40s: ", ["by ID BTree root offset"]),
+    obj_field_name("id_btree"),
+    obj_start(),
     case Header#db_header.fulldocinfo_by_id_btree_state of
     {IdOffset, {NotDel, Del}} ->
-        ?cout("~p~n", [IdOffset]),
-        ?cout_tab(), ?cout_tab(),
-        ?cout("~-36s: ", ["# not deleted documents"]), ?cout("~p~n", [NotDel]),
-        ?cout_tab(), ?cout_tab(),
-        ?cout("~-36s: ", ["# deleted documents"]), ?cout("~p~n", [Del]),
+        obj_field("offset", IdOffset),
+        obj_field_name("reduction"),
+        obj_start(),
+        obj_field("not_deleted_doc_count", NotDel),
+        obj_field("deleted_doc_count", Del),
+        obj_end(),
         validate_btree_root(File, Header#db_header.fulldocinfo_by_id_btree_state);
     nil ->
-        ?cout("nil~n", []);
+        obj_field("offset", nil);
     IdBTreeState ->
-        ?cout("unexpected state format - ~p~n", [IdBTreeState])
+        obj_field("error", io_lib:format("bad state: ~p", [IdBTreeState]))
     end,
+    obj_end(),
 
-    ?cout_tab(), ?cout("~-40s: ", ["by Seq BTree root offset"]),
+    obj_field_name("seq_btree"),
+    obj_start(),
     case Header#db_header.docinfo_by_seq_btree_state of
     {SeqOffset, Count} ->
-        ?cout("~p~n", [SeqOffset]),
-        ?cout_tab(), ?cout_tab(),
-        ?cout("~-36s: ", ["# doc_info records"]), ?cout("~p~n", [Count]),
+        obj_field("offset", SeqOffset),
+        obj_field_name("reduction"),
+        obj_start(),
+        obj_field("doc_info_record_count", Count),
+        obj_end(),
         validate_btree_root(File, Header#db_header.docinfo_by_seq_btree_state);
     nil ->
-        ?cout("nil~n", []);
+        obj_field("offset", nil);
     SeqBTreeState ->
-         ?cout("unexpected state format - ~p~n", [SeqBTreeState])
+        obj_field("error", io_lib:format("bad state: ~p", [SeqBTreeState]))
     end,
+    obj_end(),
 
-    ?cout_tab(), ?cout("~-40s: ", ["local docs BTree root offset"]),
+    obj_field_name("local_btree"),
+    obj_start(),
     case Header#db_header.local_docs_btree_state of
-    {LocOffset, _Red} ->
-        ?cout("~p~n", [LocOffset]),
+    {LocOffset, Red} ->
+        obj_field("offset", LocOffset),
+        obj_field_name("reduction"),
+        obj_start(),
+        obj_field("value", io_lib:format("~p", [Red])),
+        obj_end(),
         validate_btree_root(File, Header#db_header.local_docs_btree_state);
     nil ->
-        ?cout("nil~n", []);
+        obj_field("offset", nil);
     LocalBTreeState ->
-        ?cout("unexpected state format - ~p~n", [LocalBTreeState])
+        obj_field("error", io_lib:format("bad state: ~p", [LocalBTreeState]))
     end,
+    obj_end(),
 
-    ?cout_tab(), ?cout("~-40s: ", ["purge seq"]),
-    ?cout("~p~n", [Header#db_header.purge_seq]),
-    ?cout_tab(), ?cout("~-40s: ", ["purge docs offset"]),
-    ?cout("~p~n", [Header#db_header.purged_docs]),
-    case is_integer(Header#db_header.purged_docs) of
-    true ->
-        ?cout_tab(), ?cout_tab(),
-        case couch_file:pread_term(File, Header#db_header.purged_docs) of
+    obj_field("purge_seq", Header#db_header.purge_seq),
+
+    obj_field_name("purged_docs"),
+    obj_start(),
+    case Header#db_header.purged_docs of
+    PurgedPointer when is_integer(PurgedPointer) ->
+        obj_field("offset", PurgedPointer),
+        case couch_file:pread_term(File, PurgedPointer) of
         {ok, PurgedDocs} ->
-            ?cout("~-36s: ", ["purged docs"]),
-            ?cout("~s~n", [json_purged_docs(PurgedDocs)]);
+            case json_purged_docs(PurgedDocs) of
+            error ->
+                obj_field("error",
+                          io_lib:format("bad purged docs value: ~p", [PurgedDocs]));
+            {ok, JsonPurged} ->
+                obj_field("value", {json, JsonPurged})
+            end;
         ErrorPurged ->
-            ?cout("~-36s: ", ["purged docs"]),
-            ?cout("failure reading purged docs - ~p~n", [ErrorPurged])
+            obj_field("error",
+                      io_lib:format("error reading purged docs value: ~p", [ErrorPurged]))
         end;
-    false ->
-        ok
+    nil ->
+        obj_field("offset", nil);
+    Purged ->
+        obj_field("error", io_lib:format("bad purged docs pointer: ~p", [Purged]))
     end,
+    obj_end(),
 
-    ?cout_tab(), ?cout("~-40s: ", ["_security object offset"]),
-    ?cout("~p~n", [Header#db_header.security_ptr]),
-    case is_integer(Header#db_header.security_ptr) of
-    true ->
-        ?cout_tab(), ?cout_tab(),
-        case couch_file:pread_term(File, Header#db_header.security_ptr) of
+    obj_field_name("security_object"),
+    obj_start(),
+    case Header#db_header.security_ptr of
+    SecurityPtr when is_integer(SecurityPtr) ->
+        obj_field("offset", SecurityPtr),
+        case couch_file:pread_term(File, SecurityPtr) of
         {ok, Security} ->
-            ?cout("~-36s: ", ["security_object"]),
-            ?cout("~s~n", [json_security(Security)]);
+            case json_security(Security) of
+            error ->
+                obj_field("error",
+                          io_lib:format("bad security object value: ~p", [Security]));
+            {ok, SecurityJson} ->
+                obj_field("value", {json, SecurityJson})
+            end;
         ErrorSec ->
-            ?cout("~-36s: ", ["security object"]),
-            ?cout("failure reading _security object - ~p~n", [ErrorSec])
+            obj_field("error",
+                      io_lib:format("error reading security object: ~p", [ErrorSec]))
         end;
-    false ->
-        ok
+    nil ->
+        obj_field("offset", nil);
+    Security ->
+        obj_field("error", io_lib:format("bad security object pointer: ~p", [Security]))
     end,
+    obj_end(),
 
-    ?cout_tab(), ?cout("~-40s: ", ["revs limit"]),
-    ?cout("~p~n", [Header#db_header.revs_limit]).
+    obj_field("revs_limit", Header#db_header.revs_limit).
 
 
 json_purged_docs(PurgedDocs) ->
     try
-        iolist_to_binary(?jsone(lists:map(fun({Id, Revs}) ->
+        {ok, iolist_to_binary(?jsone(lists:map(fun({Id, Revs}) ->
             {Id, couch_doc:revs_to_strs(Revs)}
-        end, PurgedDocs)))
+        end, PurgedDocs)))}
     catch _:_ ->
-        io_lib:format("unexpected purged docs format - ~p", PurgedDocs)
+        error
     end.
 
 
 json_security(Sec) ->
     try
-        iolist_to_binary(?jsone(Sec))
+        {ok, iolist_to_binary(?jsone(Sec))}
     catch _:_ ->
-        io_lib:format("unexpected _security object format - ~p", Sec)
+        error
     end.
 
 
@@ -260,12 +332,10 @@ validate_btree_root(File, {Offset, _Reds} = BTreeState) ->
         true ->
             maybe_report_btree_stats(BTreeState, File);
         false ->
-            ?cout_tab(), ?cout_tab(),
-            ?cout("invalid root node - ~s~n", [io_lib:format("~p", [Root])])
+            obj_field("error", io_lib:format("invalid root node: ~p", [Root]))
         end;
     Error ->
-        ?cout_tab(), ?cout_tab(),
-        ?cout("error loading root node - ~s~n", [io_lib:format("~p", [Error])])
+        obj_field("error", io_lib:format("error loading node: ~p", [Error]))
     end.
 
 
@@ -275,35 +345,28 @@ maybe_report_btree_stats(BTreeState, File) ->
     false ->
         ok;
     true ->
-        BTreeStats = try
-            analyze_btree(BTreeState, File)
+        obj_field_name("stats"),
+        obj_start(),
+        try
+            Stats = analyze_btree(BTreeState, File),
+            report_btree_stats(Stats)
         catch
         throw:{btree_error, Error} ->
-            ?cout_tab(), ?cout_tab(),
-            ?cout("Error traversing the BTree to build the stats: ~s~n", [Error]),
-            nil
+            obj_field("error", io_lib:format("error analyzing btree: ~s", [Error]))
         end,
-        report_btree_stats(BTreeStats)
+        obj_end()
     end.
 
 
-report_btree_stats(nil) ->
-    ok;
 report_btree_stats(Acc) ->
     #btree_acc{
         kp_nodes = KpNodes,
         kv_nodes = KvNodes,
         depth = Depth
     } = Acc,
-    ?cout_tab(), ?cout_tab(),
-    ?cout("BTree stats~n", []),
-    ?cout_tab(), ?cout_tab(), ?cout_tab(),
-    ?cout("~-32s: ", ["depth"]), ?cout("~p~n", [Depth]),
-    ?cout_tab(), ?cout_tab(), ?cout_tab(),
-    ?cout("~-32s: ", ["# kp_nodes"]), ?cout("~p~n", [KpNodes]),
-    ?cout_tab(), ?cout_tab(), ?cout_tab(),
-    ?cout("~-32s: ", ["# kv_nodes"]), ?cout("~p~n", [KvNodes]),
-    ok.
+    obj_field("depth", Depth),
+    obj_field("kp_nodes", KpNodes),
+    obj_field("kv_nodes", KvNodes).
 
 
 analyze_btree(BTreeState, File) ->

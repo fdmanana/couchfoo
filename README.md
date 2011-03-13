@@ -4,6 +4,7 @@ couchfoo is a standalone command line tool to analyse Apache CouchDB database fi
 It also allows to grab an existing header from a database file and append a copy
 of it to the end of that same database file. These two main features make it an useful
 tool to help recover corrupted database files and hack on the core database engine.
+The output is in JSON, so that it can be consumed and used by other tools.
 
 Some of the things it currently does:
 
@@ -25,8 +26,8 @@ Some of the things it currently does:
 
 ## TODOs
 
-* Output all the information in a JSON format so that it can be used by other tools.
-  For example a tool to build a UI graph or an Heat Map
+* Generate a nice UI or build another tool to consume the JSON output from couchfoo
+  and generate the UI (could be an HeatMap for example)
 
 * Add more useful BTree statistics, examples: maximum and minimum number of values per
   kv_node and kp_node, maximum file offset distance between consecutive levels in the
@@ -69,50 +70,188 @@ $
 Examples:
 
 <pre>
-$ ./couchfoo -S -N 1 /mnt/cm/fdmanana/test_dbs/large1kb.couch 
-Database file `/mnt/cm/fdmanana/test_dbs/large1kb.couch` has 117272 blocks and is 480342114 bytes long.
+$ ./couchfoo -S -N 3 /mnt/cm/fdmanana/test_dbs/large1kb.couch
+{
+    "file": "/mnt/cm/fdmanana/test_dbs/large1kb.couch",
+    "file_size": 480342114,
+    "file_block_count": 117272,
+    "file_start_offset": 480342114,
+    "file_end_offset": 0,
+    "max_headers_to_display": 3,
+    "headers": [
+        {
+            "offset": 480342016,
+            "block": 117271,
+            "size": 77,
+            "version": 5,
+            "update_seq": 341301,
+            "unused": 0,
+            "id_btree": {
+                "offset": 480339898,
+                "reduction": {
+                    "not_deleted_doc_count": 341298,
+                    "deleted_doc_count": 0
+                },
+                "stats": {
+                    "depth": 5,
+                    "kp_nodes": 1686,
+                    "kv_nodes": 31956
+                }
+            },
+            "seq_btree": {
+                "offset": 480336370,
+                "reduction": {
+                    "doc_info_record_count": 341298
+                },
+                "stats": {
+                    "depth": 4,
+                    "kp_nodes": 353,
+                    "kv_nodes": 17961
+                }
+            },
+            "local_btree": {
+                "offset": 480317540,
+                "reduction": {
+                    "value": "[]"
+                },
+                "stats": {
+                    "depth": 1,
+                    "kp_nodes": 0,
+                    "kv_nodes": 1
+                }
+            },
+            "purge_seq": 1,
+            "purged_docs": {
+                "offset": 480340016,
+                "value": {"docfoo1":["1-967a00dff5e02add41819138abb3284d"]}
+            },
+            "security_object": {
+                "offset": 480321636,
+                "value": {"admins":{"names":[],"roles":["boss","foobar"]},"members":{"names":[],"roles":[]}}
+            },
+            "revs_limit": 1000
+        }, {
+            "offset": 480333824,
+            "block": 117269,
+            "size": 78,
+            "version": 5,
+            "update_seq": 341300,
+            "unused": 0,
+            "id_btree": {
+                "offset": 480329121,
+                "reduction": {
+                    "not_deleted_doc_count": 341299,
+                    "deleted_doc_count": 0
+                },
+                "stats": {
+                    "depth": 5,
+                    "kp_nodes": 1686,
+                    "kv_nodes": 31956
+                }
+            },
+            "seq_btree": {
+                "offset": 480331751,
+                "reduction": {
+                    "doc_info_record_count": 341299
+                },
+                "stats": {
+                    "depth": 4,
+                    "kp_nodes": 353,
+                    "kv_nodes": 17961
+                }
+            },
+            "local_btree": {
+                "offset": 480317540,
+                "reduction": {
+                    "value": "[]"
+                },
+                "stats": {
+                    "depth": 1,
+                    "kp_nodes": 0,
+                    "kv_nodes": 1
+                }
+            },
+            "purge_seq": 0,
+            "purged_docs": {
+                "offset": null
+            },
+            "security_object": {
+                "offset": 480321636,
+                "value": {"admins":{"names":[],"roles":["boss","foobar"]},"members":{"names":[],"roles":[]}}
+            },
+            "revs_limit": 1000
+        }, {
+            "offset": 480325632,
+            "block": 117267,
+            "size": 78,
+            "version": 5,
+            "update_seq": 341299,
+            "unused": 0,
+            "id_btree": {
+                "offset": 480167831,
+                "reduction": {
+                    "not_deleted_doc_count": 341298,
+                    "deleted_doc_count": 0
+                },
+                "stats": {
+                    "depth": 5,
+                    "kp_nodes": 1686,
+                    "kv_nodes": 31956
+                }
+            },
+            "seq_btree": {
+                "offset": 479936435,
+                "reduction": {
+                    "doc_info_record_count": 341298
+                },
+                "stats": {
+                    "depth": 4,
+                    "kp_nodes": 353,
+                    "kv_nodes": 17961
+                }
+            },
+            "local_btree": {
+                "offset": 480317540,
+                "reduction": {
+                    "value": "[]"
+                },
+                "stats": {
+                    "depth": 1,
+                    "kp_nodes": 0,
+                    "kv_nodes": 1
+                }
+            },
+            "purge_seq": 0,
+            "purged_docs": {
+                "offset": null
+            },
+            "security_object": {
+                "offset": 480321636,
+                "value": {"admins":{"names":[],"roles":["boss","foobar"]},"members":{"names":[],"roles":[]}}
+            },
+            "revs_limit": 1000
+        }
+    ],
+    "valid_headers": 3,
+    "corrupted_headers": 0
+}
 
-Found header at offset 480342016 (block 117271), 77 bytes, details:
-
-    version                                 : 5
-    update seq                              : 341301
-    unused                                  : 0
-    by ID BTree root offset                 : 480339898
-        # not deleted documents             : 341298
-        # deleted documents                 : 0
-        BTree stats
-            depth                           : 5
-            # kp_nodes                      : 1686
-            # kv_nodes                      : 31956
-    by Seq BTree root offset                : 480336370
-        # doc_info records                  : 341298
-        BTree stats
-            depth                           : 4
-            # kp_nodes                      : 353
-            # kv_nodes                      : 17961
-    local docs BTree root offset            : 480317540
-        BTree stats
-            depth                           : 1
-            # kp_nodes                      : 0
-            # kv_nodes                      : 1
-    purge seq                               : 1
-    purge docs offset                       : 480340016
-        purged docs                         : {"docfoo1":["1-967a00dff5e02add41819138abb3284d"]}
-    _security object offset                 : 480321636
-        security_object                     : {"admins":{"names":[],"roles":["boss","foobar"]},"members":{"names":[],"roles":[]}}
-    revs limit                              : 1000
-
-
-1 headers shown.
 $
 </pre>
 
 
 <pre>
 $ ./couchfoo --count-headers test_dbs/foo.couch 
-Database file `test_dbs/foo.couch` has 13 blocks and is 49241 bytes long.
+{
+    "file": "test_dbs/foo.couch",
+    "file_size": 49241,
+    "file_block_count": 13,
+    "file_start_offset": 49241,
+    "file_end_offset": 0,
+    "valid_headers_count": 10,
+    "corrupted_headers_count": 1
+}
 
-Found 10 valid headers and 1 corrupted headers.
 $
 </pre>
 

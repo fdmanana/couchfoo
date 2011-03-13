@@ -19,6 +19,9 @@
 
 -include("couchfoo.hrl").
 
+-define(cerr_tab(), ?cerr("    ", [])).
+-define(cerr_nl(), ?cerr("~n", [])).
+
 
 usage() ->
     ?cerr("Usage:~n~n", []),

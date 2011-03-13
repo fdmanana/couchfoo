@@ -40,6 +40,3 @@
 
 -define(cerr(F, A), io:format(standard_error, F, A)).
 -define(cout(F, A), io:format(F, A)).
--define(cerr_nl(), ?cerr("~n", [])).
--define(cerr_tab(), ?cerr("    ", [])).
--define(cout_tab(), ?cout("    ", [])).
