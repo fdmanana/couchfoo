@@ -29,9 +29,8 @@ Some of the things it currently does:
 * Generate a nice UI or build another tool to consume the JSON output from couchfoo
   and generate the UI (could be an HeatMap for example)
 
-* Add more useful BTree statistics, examples: maximum and minimum number of values per
-  kv_node and kp_node, maximum file offset distance between consecutive levels in the
-  BTree, etc
+* Add more useful BTree statistics, examples: maximum file offset distance between
+  consecutive levels in the BTree, etc
 
 
 # Usage
@@ -100,7 +99,11 @@ $ ./couchfoo -S -N 4 /mnt/cm/fdmanana/test_dbs/large1kb.couch
                 "stats": {
                     "depth": 5,
                     "kp_nodes": 1686,
-                    "kv_nodes": 31956
+                    "kv_nodes": 31956,
+                    "max_keys_per_kp_node": 44,
+                    "min_keys_per_kp_node": 1,
+                    "max_keys_per_kv_node": 18,
+                    "min_keys_per_kv_node": 9
                 }
             },
             "seq_btree": {
@@ -111,7 +114,11 @@ $ ./couchfoo -S -N 4 /mnt/cm/fdmanana/test_dbs/large1kb.couch
                 "stats": {
                     "depth": 4,
                     "kp_nodes": 353,
-                    "kv_nodes": 17961
+                    "kv_nodes": 17961,
+                    "max_keys_per_kp_node": 73,
+                    "min_keys_per_kp_node": 11,
+                    "max_keys_per_kv_node": 22,
+                    "min_keys_per_kv_node": 16
                 }
             },
             "local_btree": {
@@ -122,7 +129,11 @@ $ ./couchfoo -S -N 4 /mnt/cm/fdmanana/test_dbs/large1kb.couch
                 "stats": {
                     "depth": 1,
                     "kp_nodes": 0,
-                    "kv_nodes": 1
+                    "kv_nodes": 1,
+                    "max_keys_per_kp_node": 0,
+                    "min_keys_per_kp_node": 0,
+                    "max_keys_per_kv_node": 1,
+                    "min_keys_per_kv_node": 1
                 }
             },
             "purge_seq": 0,
@@ -150,7 +161,11 @@ $ ./couchfoo -S -N 4 /mnt/cm/fdmanana/test_dbs/large1kb.couch
                 "stats": {
                     "depth": 5,
                     "kp_nodes": 1686,
-                    "kv_nodes": 31956
+                    "kv_nodes": 31956,
+                    "max_keys_per_kp_node": 44,
+                    "min_keys_per_kp_node": 1,
+                    "max_keys_per_kv_node": 18,
+                    "min_keys_per_kv_node": 9
                 }
             },
             "seq_btree": {
@@ -161,7 +176,11 @@ $ ./couchfoo -S -N 4 /mnt/cm/fdmanana/test_dbs/large1kb.couch
                 "stats": {
                     "depth": 4,
                     "kp_nodes": 353,
-                    "kv_nodes": 17961
+                    "kv_nodes": 17961,
+                    "max_keys_per_kp_node": 73,
+                    "min_keys_per_kp_node": 11,
+                    "max_keys_per_kv_node": 22,
+                    "min_keys_per_kv_node": 15
                 }
             },
             "local_btree": {
@@ -172,7 +191,11 @@ $ ./couchfoo -S -N 4 /mnt/cm/fdmanana/test_dbs/large1kb.couch
                 "stats": {
                     "depth": 1,
                     "kp_nodes": 0,
-                    "kv_nodes": 1
+                    "kv_nodes": 1,
+                    "max_keys_per_kp_node": 0,
+                    "min_keys_per_kp_node": 0,
+                    "max_keys_per_kv_node": 1,
+                    "min_keys_per_kv_node": 1
                 }
             },
             "purge_seq": 0,

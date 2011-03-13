@@ -40,7 +40,11 @@
 -record(btree_stats, {
     depth = 0,
     kp_nodes = 0,
-    kv_nodes = 0
+    kv_nodes = 0,
+    max_keys_per_kpnode = 0,
+    min_keys_per_kpnode = nil,
+    max_keys_per_kvnode = 0,
+    min_keys_per_kvnode = nil
 }).
 
 
@@ -362,11 +366,29 @@ report_btree_stats(Acc) ->
     #btree_stats{
         kp_nodes = KpNodes,
         kv_nodes = KvNodes,
-        depth = Depth
+        depth = Depth,
+        max_keys_per_kvnode = MaxKeysKvNode,
+        min_keys_per_kvnode = MinKeysKvNode,
+        max_keys_per_kpnode = MaxKeysKpNode,
+        min_keys_per_kpnode = MinKeysKpNode
     } = Acc,
     obj_field("depth", Depth),
     obj_field("kp_nodes", KpNodes),
-    obj_field("kv_nodes", KvNodes).
+    obj_field("kv_nodes", KvNodes),
+    obj_field("max_keys_per_kp_node", MaxKeysKpNode),
+    case MinKeysKpNode of
+    nil ->
+        obj_field("min_keys_per_kp_node", MaxKeysKpNode);
+    _ ->
+        obj_field("min_keys_per_kp_node", MinKeysKpNode)
+    end,
+    obj_field("max_keys_per_kv_node", MaxKeysKvNode),
+    case MinKeysKvNode of
+    nil ->
+        obj_field("min_keys_per_kv_node", MaxKeysKvNode);
+    _ ->
+        obj_field("min_keys_per_kv_node", MinKeysKvNode)
+    end.
 
 
 analyze_btree(BTreeState, File) ->
@@ -374,13 +396,29 @@ analyze_btree(BTreeState, File) ->
         BTreeState, File, fun btree_analyst/3, #btree_stats{}).
 
 
-btree_analyst(map, {kv_node, _KvList}, Acc) ->
-    #btree_stats{depth = Depth, kv_nodes = KvNodes} = Acc,
-    Acc#btree_stats{depth = Depth + 1, kv_nodes = KvNodes + 1};
+btree_analyst(map, {kv_node, KvList}, Acc) ->
+    #btree_stats{
+        depth = Depth,
+        kv_nodes = KvNodes,
+        max_keys_per_kvnode = MaxKeys,
+        min_keys_per_kvnode = MinKeys
+    } = Acc,
+    KvListLen = length(KvList),
+    Acc#btree_stats{
+        depth = Depth + 1,
+        kv_nodes = KvNodes + 1,
+        max_keys_per_kvnode = lists:max([MaxKeys, KvListLen]),
+        min_keys_per_kvnode = lists:min([MinKeys, KvListLen])
+    };
 
-btree_analyst(reduce, {kp_node, _KpList}, AccList) ->
+btree_analyst(reduce, {kp_node, KpList}, AccList) ->
+    KpListLen = length(KpList),
     #btree_stats{
         depth = 1 + lists:max([Depth || #btree_stats{depth = Depth} <- AccList]),
         kp_nodes = 1 + lists:sum([KpNodes || #btree_stats{kp_nodes = KpNodes} <- AccList]),
-        kv_nodes = lists:sum([KvNodes || #btree_stats{kv_nodes = KvNodes} <- AccList])
+        kv_nodes = lists:sum([KvNodes || #btree_stats{kv_nodes = KvNodes} <- AccList]),
+        max_keys_per_kvnode = lists:max([M || #btree_stats{max_keys_per_kvnode = M} <- AccList]),
+        min_keys_per_kvnode = lists:min([M || #btree_stats{min_keys_per_kvnode = M} <- AccList]),
+        max_keys_per_kpnode = lists:max([KpListLen | [M || #btree_stats{max_keys_per_kpnode = M} <- AccList]]),
+        min_keys_per_kpnode = lists:min([KpListLen | [M || #btree_stats{min_keys_per_kpnode = M} <- AccList]])
     }.
